@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日本語 会話＆シャドーイングトレーナー</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f5f7fa; color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 600px; width: 100%; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); box-sizing: border-box; }
+        h1 { text-align: center; font-size: 24px; color: #2c3e50; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #7f8c8d; font-size: 14px; margin-bottom: 25px; }
+        .scene-select, .chat-screen { display: none; }
+        .active { display: block; }
+        .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; font-size: 16px; font-weight: bold; text-align: center; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s; box-sizing: border-box; }
+        .btn-primary { background-color: #3498db; color: white; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-option { background-color: #ecf0f1; color: #2c3e50; border: 2px solid #bdc3c7; text-align: left; padding: 12px 15px; font-weight: normal; }
+        .btn-option:hover { background-color: #bdc3c7; }
+        .btn-restart { background-color: #e74c3c; color: white; margin-top: 30px; }
+        
+        .chat-area { display: flex; flex-direction: column; gap: 15px; min-height: 200px; margin-bottom: 25px; padding: 15px; background: #fafafa; border-radius: 8px; border: 1px solid #e0e0e0; }
+        .bubble { padding: 12px 16px; border-radius: 14px; max-width: 85%; font-size: 17px; line-height: 1.4; font-weight: 500; }
+        .partner-box { align-self: flex-start; width: 100%; }
+        .partner-bubble { background-color: #e8f4fd; color: #1e3a8a; border-top-left-radius: 2px; display: inline-block; }
+        .player-box { align-self: flex-end; width: 100%; text-align: right; display: none; }
+        .player-bubble { background-color: #e6f9ed; color: #137333; border-top-right-radius: 2px; display: inline-block; text-align: left; }
+        
+        .speaker-label { font-size: 11px; font-weight: bold; color: #7f8c8d; margin-bottom: 3px; }
+        .guide-label { font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 10px; border-left: 4px solid #3498db; padding-left: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🗣️ 日本語会話トレーニング</h1>
+    <div class="subtitle">あいてのあとに 続いて 声にだそう！ (シャドーイング)</div>
+
+    <!-- 1. シーン選択画面 -->
+    <div id="scene-select" class="scene-select active">
+        <p style="text-align: center; color: #666; margin-bottom: 20px;">練習したいシチュエーションを選んでください</p>
+        <div id="scene-buttons-zone"></div>
+    </div>
+
+    <!-- 2. 会話画面 -->
+    <div id="chat-screen" class="chat-screen">
+        <div class="chat-area">
+            <!-- 相手のセリフ -->
+            <div class="partner-box">
+                <div class="speaker-label" id="partner-name">あいて</div>
+                <div id="partner-text" class="bubble partner-bubble">...</div>
+            </div>
+            <!-- 自分のセリフ -->
+            <div class="player-box" id="player-box">
+                <div class="speaker-label">あなた（お手本のこえ）</div>
+                <div id="player-text" class="bubble player-bubble">...</div>
+            </div>
+        </div>
+        
+        <div id="guide-title" class="guide-label">つぎの返事を選んでね</div>
+        <div id="options-zone"></div>
+        
+        <!-- 元からある赤いボタン（確実に機能するようにイベントを直接設定） -->
+        <button class="btn btn-restart" onclick="toMainMenu()">ちがう会話をえらぶ</button>
+    </div>
+</div>
+
+<script>
+// シナリオデータ（基本4つ + 追加10個、合計14シーンをすべて内蔵）
+const scenarios = {
+    chikoku: {
+        title: "⏰ 1. 電車が遅れる（遅刻）", partnerName: "先生",
+        start: { text: "明日から、テストです。遅刻しないでくださいね。", options: [{ text: "はい、わかりました！", next: "end" }, { text: "先生、もし電車が遅れたら、どうしますか？", next: "trainDelay" }] },
+        trainDelay: { text: "電車が遅れたときは、学校に電話してください。", options: [{ text: "わかりました。電話します。", next: "end" }] },
+        end: { text: "はい、よくできました！気をつけてきてくださいね。", options: [], isEnd: true }
+    },
+    yasumi: {
+        title: "🤒 2. 学校を休む（体調不良）", partnerName: "先生",
+        start: { text: "はい、職員室です。どうしましたか？", options: [{ text: "先生、お腹が痛いので、今日学校を休いたいです。", next: "checkHospital" }] },
+        checkHospital: { text: "大丈夫ですか？病院には行きますか？", options: [{ text: "はい、今から病院に行きます。", next: "end" }, { text: "いいえ、家で薬を飲んで寝ます。", next: "end" }] },
+        end: { text: "わかりました。ゆっくり休んでくださいね。", options: [], isEnd: true }
+    },
+    interview: {
+        title: "💼 3. バイトの面接", partnerName: "店長",
+        start: { text: "はじめまして。アルバイトの面接ですね。名前を教えてください。", options: [{ text: "はじめまして。私は留学生のトムです。よろしくお願いします！", next: "schedule" }] },
+        schedule: { text: "一週間に、何日くらい働くことができますか？", options: [{ text: "一週間に３日くらい働くことができます。土曜日も大丈夫です。", next: "end" }] },
+        end: { text: "ありがとう。では、結果は来週までに電話しますね。", options: [], isEnd: true }
+    },
+    convenience: {
+        title: "🏪 4. コンビニのレジ", partnerName: "店員",
+        start: { text: "いらっしゃいませ。お弁当、温めますか？", options: [{ text: "はい、温めてください。お願いします。", next: "bag" }, { text: "いいえ、そのままで大丈夫です。", next: "bag" }] },
+        bag: { text: "袋はご利用になりますか？", options: [{ text: "はい、１枚ください。", next: "end" }, { text: "いいえ、袋はいりません。このまま持っていきます。", next: "end" }] },
+        end: { text: "ありがとうございました。またお越しくださいませ。", options: [], isEnd: true }
+    },
+    ticket: {
+        title: "🎫 5. 駅の窓口（切符を買う）", partnerName: "駅員",
+        start: { text: "いらっしゃいませ。どちらまで行かれますか？", options: [{ text: "東京駅までの切符を、１枚ください。", next: "type" }] },
+        type: { text: "自由席（じゆうせき）ですか？指定席（していせき）ですか？", options: [{ text: "一番安い、自由席でお願いします。", next: "end" }, { text: "座りたいので、指定席でお願いします。", next: "end" }] },
+        end: { text: "わかりました。では、６千円です。ありがとうございます。", options: [], isEnd: true }
+    },
+    hospital: {
+        title: "🏥 6. 病院の受付（はじめて）", partnerName: "受付の人",
+        start: { text: "こんにちは。今日はどうされましたか？", options: [{ text: "昨日から熱があります。初めてですが、大丈夫ですか？", next: "card" }] },
+        card: { text: "はい、大丈夫ですよ。保険証（ほけんしょう）は持っていますか？", options: [{ text: "はい、これです。お願いします。", next: "end" }, { text: "すみません、家に忘れてしまいました。", next: "forget" }] },
+        forget: { text: "それでは、今日は一度全額払ってください。明日持ってくれば大丈夫です。", options: [{ text: "わかりました。そうします。", next: "end" }] },
+        end: { text: "では、あちらの椅子に座って待ってくださいね。", options: [], isEnd: true }
+    },
+    askWay: {
+        title: "🗺️ 7. 道を聞く（街中で）", partnerName: "近くの人",
+        start: { text: "はい、何かありましたか？", options: [{ text: "すみません、市役所に行きたいですが、道がわかりません。", next: "guide" }] },
+        guide: { text: "市役所ですね。この道を真っ直ぐ行って、信号を右に曲がるとありますよ。", options: [{ text: "真っ直ぐ行って、右ですね。歩いて何分ですか？", next: "time" }] },
+        time: { text: "ここから歩いて、５分くらいですよ。", options: [{ text: "わかりました！教えてくれてありがとうございました。", next: "end" }] },
+        end: { text: "いいえ、気をつけて行ってくださいね。", options: [], isEnd: true }
+    },
+    restaurant: {
+        title: "🍜 8. ラーメン屋（注文）", partnerName: "店員",
+        start: { text: "いらっしゃいませ！ご注文はお決まりですか？", options: [{ text: "豚骨（とんこつ）ラーメンを１つください。", next: "topping" }] },
+        topping: { text: "トッピングはどうしますか？もやしとチャーシューが増量できますよ。", options: [{ text: "じゃあ、もやしとチャーシューを両方大盛りでお願いします！", next: "end" }, { text: "普通のままで大丈夫です。", next: "end" }] },
+        end: { text: "はい！豚骨ラーメン、すぐにお作りしますので少々お待ちください！", options: [], isEnd: true }
+    },
+    delivery: {
+        title: "📦 9. 宅急便（家での受け取り）", partnerName: "配達員",
+        start: { text: "ピンポーン。お荷物のお届けです！", options: [{ text: "はい！今、開けます！", next: "sign" }] },
+        sign: { text: "お届け物です。ここにサインか、ハンコをお願いします。", options: [{ text: "はい、名前を書きました。これでいいですか？", next: "end" }] },
+        end: { text: "はい、バッチリです。お荷物ここに置いておきますね。ありがとうございました！", options: [], isEnd: true }
+    },
+    haircut: {
+        title: "✂️ 10. 美容院（髪型を伝える）", partnerName: "美容師",
+        start: { text: "いらっしゃいませ。今日はどのような髪型（かみがた）にしますか？", options: [{ text: "全体的に少し短くしてください。あと、軽くしたいです。", next: "bangs" }] },
+        bangs: { text: "わかりました。前髪（まえがみ）の長さはどうしますか？", options: [{ text: "前髪は眉毛（まゆげ）のあたりで止めてください。", next: "end" }, { text: "目にかからないくらいでお願いします。", next: "end" }] },
+        end: { text: "かしこまりました。では、こちらでシャンプーから始めますね。", options: [], isEnd: true }
+    }
+};
+
+let currentScenario = null;
+let currentStep = "start";
+
+function speak(text, callback) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ja-JP';
+    utterance.rate = 0.85; 
+    if (callback) { utterance.onend = callback; }
+    window.speechSynthesis.speak(utterance);
+}
+
+function initMenu() {
+    const zone = document.getElementById("scene-buttons-zone");
+    zone.innerHTML = "";
+    Object.keys(scenarios).forEach(key => {
+        const btn = document.createElement("button");
+        btn.className = "btn btn-primary";
+        btn.innerText = scenarios[key].title;
+        btn.onclick = () => startScene(key);
+        zone.appendChild(btn);
+    });
+}
+
+function startScene(sceneKey) {
+    currentScenario = scenarios[sceneKey];
+    currentStep = "start";
+    document.getElementById("scene-select").classList.remove("active");
+    document.getElementById("chat-screen").classList.add("active");
+    document.getElementById("partner-name").innerText = currentScenario.partnerName;
+    renderStep();
+}
+
+function renderStep() {
+    const stepData = currentScenario[currentStep];
+    document.getElementById("player-box").style.display = "none";
+    document.getElementById("options-zone").innerHTML = "";
+    document.getElementById("guide-title").innerText = "あいての話を聞いています...";
+    
+    document.getElementById("partner-text").innerText = stepData.text;
+    
+    speak(stepData.text, () => {
+        document.getElementById("guide-title").innerText = "つぎの返事を選んでね";
+        
+        if (stepData.isEnd) {
+            document.getElementById("guide-title").innerText = "✨ 会話クリア！";
+            
+            const promptText = "私は日本語を勉強している留学生です。日常会話の練習をしたいので、さっき練習したシチュエーションの相手（先生、店員、店長など）になって会話を始めてください。日本語の初心者なので、できるだけ「簡単で実用的な言葉」を使い、普段より「ゆっくり」話してください。私が間違えたら優しく教えてください。準備ができたら話しかけてください。";
+
+            const optionsZone = document.getElementById("options-zone");
+            const geminiBox = document.createElement("div");
+            geminiBox.style.marginTop = "15px";
+            geminiBox.style.marginBottom = "15px";
+            geminiBox.style.padding = "15px";
+            geminiBox.style.backgroundColor = "#f0f7ff";
+            geminiBox.style.border = "2px dashed #3498db";
+            geminiBox.style.borderRadius = "8px";
+            geminiBox.style.textAlign = "center";
+            
+            geminiBox.innerHTML = `
+                <p style="color: #27ae60; font-weight: bold; font-size: 18px; margin: 0 0 10px 0;">よくできました！🎉</p>
+                <p style="font-size: 14px; color: #2c3e50; line-height: 1.5; margin: 0 0 15px 0; text-align: left;">
+                    <strong>🚀 次のステップ：Geminiと自由に話そう！</strong><br>
+                    ① 下の「① 設定をコピーする」ボタンを押します。<br>
+                    ② 「② Geminiを開く」ボタンを押してGeminiへ行きます。<br>
+                    ③ 貼り付けて送信したあと、マイクのマークを押して話してね！
+                </p>
+                <button id="copy-btn" class="btn" style="background-color: #2ecc71; color: white; margin: 5px auto; max-width: 280px;" onclick="copyPrompt(\`${promptText}\`)">
+                    📋 ① 設定をコピーする
+                </button>
+                <button class="btn btn-primary" style="background-color: #1a73e8; margin: 5px auto; max-width: 280px;" onclick="openGemini()">
+                    💬 ② Geminiを開いて練習する
+                </button>
+            `;
+            optionsZone.appendChild(geminiBox);
+            // 💡 elseで分けたので、クリア時はこれ以上ボタンを作らず、処理を安全に終了させます
+        } else {
+            stepData.options.forEach(opt => {
+                const btn = document.createElement("button");
+                btn.className = "btn btn-option";
+                btn.innerText = opt.text;
+                btn.onclick = () => selectOption(opt);
+                document.getElementById("options-zone").appendChild(btn);
+            });
+        }
+    });
+}
+
+function selectOption(option) {
+    document.getElementById("options-zone").innerHTML = "";
+    document.getElementById("guide-title").innerText = "お手本に続いて声にだそう！";
+    
+    const playerBox = document.getElementById("player-box");
+    document.getElementById("player-text").innerText = option.text;
+    playerBox.style.display = "block";
+    
+    speak(option.text, () => {
+        setTimeout(() => {
+            currentStep = option.next;
+            renderStep();
+        }, 1500);
+    });
+}
+
+function copyPrompt(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        const copyBtn = document.getElementById("copy-btn");
+        copyBtn.innerText = "✅ コピーしました！";
+        copyBtn.style.backgroundColor = "#27ae60";
+        setTimeout(() => {
+            copyBtn.innerText = "📋 ① 設定をコピーする";
+            copyBtn.style.backgroundColor = "#2ecc71";
+        }, 3000);
+    }).catch(err => {
+        alert("コピーに失敗しました。文字を直接選んでコピーしてください。");
+    });
+}
+
+function openGemini() {
+    window.open("https://gemini.google.com/", "_blank");
+}
+
+function toMainMenu() {
+    window.speechSynthesis.cancel();
+    document.getElementById("chat-screen").classList.remove("active");
+    document.getElementById("scene-select").classList.add("active");
+}
+
+// 起動処理
+initMenu();
+</script>
+
+</body>
+</html>
